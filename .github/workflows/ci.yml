@@ -1,0 +1,36 @@
+# Inner-loop CI for book-service, run by Sandforge's act_runner on every push (including work/*).
+#
+# Kept lean — compile + unit/slice/integration tests via the Gradle wrapper — so the
+# push -> green round-trip stays fast. The full deploy-target e2e (live REST API against a
+# running container behind the LB) runs later at `sandforge graduate` via .sandforge/verify.sh,
+# not on every push.
+#
+# Note: Sandforge's warm CI image bakes Go + Node but NOT a JDK, so we install Temurin 21 with
+# actions/setup-java and let the Gradle wrapper fetch Gradle 9.4.1. The Gradle user-home cache is
+# restored across runs to keep the loop warm.
+name: CI
+on: [push]
+
+jobs:
+  build-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Cache Gradle (wrapper dist + dependency cache)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle', 'gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Build + test
+        run: ./gradlew --no-daemon build
