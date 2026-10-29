@@ -1,4 +1,4 @@
-# Inner-loop CI for book-service, run by Sandforge's act_runner on every push (including work/*).
+# Inner-loop CI for sf-loop-test, run by Sandforge's act_runner on every push (including work/*).
 #
 # Kept lean — compile + unit/slice/integration tests via the Gradle wrapper — so the
 # push -> green round-trip stays fast. The full deploy-target e2e (live REST API against a

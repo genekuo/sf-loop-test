@@ -1,0 +1,38 @@
+# Deploy-target stack for sf-loop-test: backend (Spring Boot) + lb (Caddy).
+# Brought up on demand at `sandforge graduate`, exercised by verify.sh, then torn down.
+# sf-loop-test persists in-memory (ConcurrentHashMap), so there is no database service.
+#
+# Env injected by Sandforge:
+#   SANDFORGE_STACK_PROJECT  compose project name (unique per graduate run)
+#   SANDFORGE_LB_PORT        host port the LB publishes on 127.0.0.1
+name: ${SANDFORGE_STACK_PROJECT:-sandforge-book}
+
+services:
+  backend:
+    build:
+      # Repo root as context so the Dockerfile can see gradlew/src; dockerfile lives in .sandforge/.
+      context: ..
+      dockerfile: .sandforge/Dockerfile
+    healthcheck:
+      # GET /books always returns 200 (empty array when fresh) — a real readiness signal.
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9001/books"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+
+  lb:
+    image: caddy:2-alpine
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${SANDFORGE_LB_PORT:-8099}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/healthz"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 3s

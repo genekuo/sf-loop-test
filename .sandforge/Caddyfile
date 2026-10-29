@@ -1,0 +1,11 @@
+# LB for the sf-loop-test deploy-target. Terminates on :80 and reverse-proxies to the backend.
+# /healthz is answered by the LB itself (a cheap liveness probe for Sandforge SC-1); every other
+# path is proxied to the Spring Boot service on :9001.
+:80 {
+	handle /healthz {
+		respond "ok" 200
+	}
+	handle {
+		reverse_proxy backend:9001
+	}
+}
