@@ -2,29 +2,17 @@ package com.example.bookstore;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.context.WebApplicationContext;
-
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import org.springframework.test.web.reactive.server.WebTestClient;
 
 @SpringBootTest
+@AutoConfigureWebTestClient
 class BookControllerTest {
 
-    private MockMvc mockMvc;
-
     @Autowired
-    void setUp(WebApplicationContext context) {
-        this.mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
-    }
+    private WebTestClient webTestClient;
 
     private static String body(String isbn, String title) {
         return """
@@ -33,80 +21,93 @@ class BookControllerTest {
     }
 
     @Test
-    void listReturnsJsonArray() throws Exception {
-        mockMvc.perform(get("/books"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$").isArray());
+    void listReturnsJsonArray() {
+        webTestClient.get().uri("/books")
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+                .expectBody().jsonPath("$").isArray();
     }
 
     @Test
-    void createReturns201WithResource() throws Exception {
-        mockMvc.perform(post("/books")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body("create-1", "Created")))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.isbn").value("create-1"))
-                .andExpect(jsonPath("$.title").value("Created"));
+    void createReturns201WithResource() {
+        webTestClient.post().uri("/books")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body("create-1", "Created"))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody()
+                .jsonPath("$.isbn").isEqualTo("create-1")
+                .jsonPath("$.title").isEqualTo("Created");
     }
 
     @Test
-    void duplicateIsbnReturns422ProblemJson() throws Exception {
-        mockMvc.perform(post("/books")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body("dup-1", "First")))
-                .andExpect(status().isCreated());
+    void duplicateIsbnReturns422ProblemJson() {
+        webTestClient.post().uri("/books")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body("dup-1", "First"))
+                .exchange()
+                .expectStatus().isCreated();
 
-        mockMvc.perform(post("/books")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body("dup-1", "Second")))
-                .andExpect(status().isUnprocessableEntity())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.isbn").value("dup-1"));
+        webTestClient.post().uri("/books")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body("dup-1", "Second"))
+                .exchange()
+                .expectStatus().isEqualTo(422)
+                .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody().jsonPath("$.isbn").isEqualTo("dup-1");
     }
 
     @Test
-    void getReturnsBookOr404() throws Exception {
-        mockMvc.perform(post("/books")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body("get-1", "Fetchable")))
-                .andExpect(status().isCreated());
+    void getReturnsBookOr404() {
+        webTestClient.post().uri("/books")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body("get-1", "Fetchable"))
+                .exchange()
+                .expectStatus().isCreated();
 
-        mockMvc.perform(get("/books/get-1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.isbn").value("get-1"));
+        webTestClient.get().uri("/books/get-1")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.isbn").isEqualTo("get-1");
 
-        mockMvc.perform(get("/books/missing-xyz"))
-                .andExpect(status().isNotFound())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+        webTestClient.get().uri("/books/missing-xyz")
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON);
     }
 
     @Test
-    void putUpsertsWith201Then200() throws Exception {
-        mockMvc.perform(put("/books/put-1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body("put-1", "Created via PUT")))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.title").value("Created via PUT"));
+    void putUpsertsWith201Then200() {
+        webTestClient.put().uri("/books/put-1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body("put-1", "Created via PUT"))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody().jsonPath("$.title").isEqualTo("Created via PUT");
 
-        mockMvc.perform(put("/books/put-1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body("put-1", "Updated via PUT")))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.title").value("Updated via PUT"));
+        webTestClient.put().uri("/books/put-1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body("put-1", "Updated via PUT"))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.title").isEqualTo("Updated via PUT");
     }
 
     @Test
-    void deleteReturns204ThenGetReturns404() throws Exception {
-        mockMvc.perform(post("/books")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body("del-1", "Doomed")))
-                .andExpect(status().isCreated());
+    void deleteReturns204ThenGetReturns404() {
+        webTestClient.post().uri("/books")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body("del-1", "Doomed"))
+                .exchange()
+                .expectStatus().isCreated();
 
-        mockMvc.perform(delete("/books/del-1"))
-                .andExpect(status().isNoContent());
+        webTestClient.delete().uri("/books/del-1")
+                .exchange()
+                .expectStatus().isNoContent();
 
-        mockMvc.perform(get("/books/del-1"))
-                .andExpect(status().isNotFound());
+        webTestClient.get().uri("/books/del-1")
+                .exchange()
+                .expectStatus().isNotFound();
     }
 }
